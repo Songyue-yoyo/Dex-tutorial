@@ -8,7 +8,7 @@ contract Exchange is ERC20 {
 
     constructor(address _CryptoDevtoken) ERC20("CryptoDev LP Token", "CDLP") {
         require(_CryptoDevtoken != address(0), "Token address passed is a null address") ;
-        cryptoDevTokenAddress = _CryptoDevtoken;
+        cryptoDevTokenAddress = _CryptoDevtoken;    
     }
 
     function getReserve() public view returns (uint) {
