@@ -66,6 +66,11 @@ export default function Home() {
   const web3ModalRef = useRef();
   // walletConnected keep track of whether the user's wallet is connected or not
   const [walletConnected, setWalletConnected] = useState(false);
+  const [account, setAccount] = useState("");
+  const [mainProvider, setMainProvider] = useState();
+  const [mainWeb3Provider, setMainWeb3Provider] = useState();
+  const [mainChainId, setMainChainId] = useState("");
+
 
   /**
    * getAmounts call various functions to retrive amounts for ethbalance,
@@ -262,7 +267,9 @@ export default function Home() {
     try {
       // Get the provider from web3Modal, which in our case is MetaMask
       // When used for the first time, it prompts the user to connect their wallet
-      await getProviderOrSigner();
+      const signer = await getProviderOrSigner(true);
+      const address = await signer.getAddress();
+      // setAccount(address);
       getAmounts();
       setWalletConnected(true);
     } catch (err) {
@@ -291,12 +298,21 @@ export default function Home() {
     // Since we store `web3Modal` as a reference, we need to access the `current` value to get access to the underlying object
     const provider = await web3ModalRef.current.connect();
     const web3Provider = new providers.Web3Provider(provider);
+    setMainProvider(provider);
+    setMainWeb3Provider(web3Provider);
 
     // If user is not connected to the Goerli network, let them know and throw an error
     const { chainId } = await web3Provider.getNetwork();
+    setMainChainId("0x"+chainId.toString());
+    // mainChainId.current = chainId;
     if (chainId !== 5) {
-      window.alert("Change the network to Goerli");
+      window.alert("Change the network to Goerli and try again");
       throw new Error("Change network to Goerli");
+    }
+
+    const accounts = await web3Provider.listAccounts();
+    if (accounts) {
+      setAccount(accounts[0]);
     }
 
     if (needSigner) {
@@ -306,24 +322,72 @@ export default function Home() {
     return web3Provider;
   };
 
+  const disconnect = async () => {
+    try {
+      await web3ModalRef.current.clearCachedProvider();
+      setWalletConnected(false);
+      setIsOwner(false);
+      setAccount("");
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
   useEffect(() => {
-    // if wallet is not connected, create a new instance of Web3Modal and connect the MetaMask wallet
-    if (!walletConnected) {
-      // Assign the Web3Modal class to the reference object by setting its `current` value
-      // The `current` value is persisted throughout as long as this page is open
       web3ModalRef.current = new Web3Modal({
         network: "goerli",
         providerOptions: {},
         disableInjectedProvider: false,
+        cacheProvider: true,
       });
-      // connectWallet();
-      // getAmounts();
+  }, []);
+
+  useEffect(() => {
+    if (mainProvider?.on) {
+      const handleAccountsChanged = (accounts) => {
+        console.log("accountsChanged", accounts);
+        if (accounts) setAccount(accounts[0]);
+      };
+
+      const handleChainChanged = (_hexChainId) => {
+        setMainChainId(_hexChainId);
+        // if (mainChainId !== "0x5") {
+        //   setWalletConnected(false);
+        //   window.alert("Change the network to Goerli and try again");
+        //   // throw new Error("Change network to Goerli");
+        // } else if (mainChainId === "0x5") {
+        //   setWalletConnected(true);
+        // }
+        if (_hexChainId === "0x5") {
+          connectWallet();
+        } else {
+          disconnect();
+          window.alert("Change the network to Goerli and try again");
+        }
+      }
+
+      const handleDisconnect = () => {
+        // console.log("disconnect");
+        disconnect();
+      }
+
+      mainProvider.on("accountsChanged", handleAccountsChanged);
+      mainProvider.on("chainChanged", handleChainChanged);
+      mainProvider.on("disconnect", handleDisconnect);
+
+      return () => {
+        if (mainProvider.removeListener) {
+          mainProvider.removeListener("accountsChanged", handleAccountsChanged);
+          mainProvider.removeListener("chainChanged",handleChainChanged);
+          mainProvider.removeListener("disconnect", handleDisconnect);
+        }
+      }
     }
-  }, [walletConnected]);
+  }, [mainProvider]);
 
   const renderButton = () => {
     // If wallet is not connected, return a button which allows them to connect their wllet
-    if (!walletConnected) {
+    if (!walletConnected || !account) {
       return (
         <button onClick={connectWallet} className={styles.button}>
           Connect your wallet
@@ -487,7 +551,7 @@ export default function Home() {
           <div className={styles.description}>
             Exchange Ethereum &#60;&#62; Crypto Dev Tokens
           </div>
-          <div>
+          {/* <div>
             <button
               className={styles.button}
               onClick={() => {
@@ -504,7 +568,7 @@ export default function Home() {
             >
               Swap
             </button>
-          </div>
+          </div> */}
           {renderButton()}
         </div>
         <div>
